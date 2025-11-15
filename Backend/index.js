@@ -15,19 +15,10 @@ dotenv.config();
 app.use(express.json());
 app.use(cors());
 
-// production
-const _dirname = path.resolve();
-
 // Routes
 app.use("/api/users/", userRouter);
 app.use("/api/resumes", resumeRouter);
 app.use("/api/ai", aiRouter);
-
-//production
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "../frontend/dist", "index.html"));
-});
 
 
 // starting server & db
