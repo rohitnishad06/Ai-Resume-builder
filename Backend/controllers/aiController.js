@@ -1,34 +1,54 @@
 const ai = require("../configs/ai");
 const resumeModel = require("../models/resumeModel");
+const dotenv = require("dotenv");
+dotenv.config();
 
 // controller for enhancing a resume's professional summary
 //POST : /api/ai/enhace-pro-sum
-const enhaceProfessionalSummary = async(req, res) => {
+const enhaceProfessionalSummary = async (req, res) => {
   try {
-    const {userContent} = req.body
-    if(!userContent){
-     return res.status(400).json({message:"Missing required Fields"})
+    const { userContent } = req.body;
+
+    if (!userContent) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const responses = await ai.chat.completions.create({
-    model: process.env.OPENAI_MODEL,
-    messages: [
-        { role: "system", content: "You are a expert in resume writting. your task is to enhance the professional summary of a resume. the summary should be 1-2 sentences also highlighting key skills, experience, and career objectives. Make it compelling and ATS-friendly. and only return text no options or anything else." },
+    // Initialize Gemini Model
+    const model = ai.getGenerativeModel({
+      model: process.env.OPENAI_MODEL || "gemini-2.0-flash",
+    });
+
+    // Generate summary enhancement
+    const response = await model.generateContent({
+      contents: [
         {
-            role: "user",
-            content: userContent,
-        },
-    ],
-});
+          parts: [
+            {
+              text:
+                "You are an expert in resume writing. Enhance the following professional summary into a compelling, ATS-friendly, 1–2 sentence statement that highlights key skills, experience, and career objectives. Only return the improved summary.\n\n" +
+                userContent
+            }
+          ]
+        }
+      ]
+    });
 
+    const enhanceContent = response.response.text();
 
-  const enhanceContent = responses.choices[0].message.content;
-  return res.status(200).json({enhanceContent})
+    if (!enhanceContent) {
+      return res.status(500).json({ message: "AI returned no content" });
+    }
+
+    return res.status(200).json({ enhanceContent });
 
   } catch (error) {
-    return res.status(400).json({message: error.message})
+    console.error("AI ERROR (Summary):", error);
+    return res.status(500).json({
+      message: "AI failed",
+      error: error.message,
+    });
   }
-}
+};
 
 
 // controller for enhancing a resume's job desciption
@@ -41,147 +61,146 @@ const enhanceJobDescripion = async (req, res) => {
       return res.status(400).json({ message: "userContent is required" });
     }
 
-    // 🔥 OpenAI request
-    const response = await ai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert in resume writing. Enhance the job description into 1–2 ATS-friendly sentences using action verbs, measurable achievements, and responsibilities. Return only the improved sentence."
-        },
-        {
-          role: "user",
-          content: userContent,
-        },
-      ],
+    // Initialize model
+    const model = ai.getGenerativeModel({
+      model: process.env.OPENAI_MODEL || "gemini-2.0-flash",
     });
 
-    const enhanceContent = response.choices[0].message.content;
+    // Generate content
+    const response = await model.generateContent({
+      contents: [
+        {
+          parts: [
+            {
+              text:
+                "You are an expert in resume writing. Enhance the job description into 1–2 ATS-friendly sentences using action verbs, measurable achievements, and responsibilities. Return only the improved sentence.\n\n" +
+                userContent
+            }
+          ]
+        }
+      ]
+    });
+
+    const enhanceContent = response.response.text();
 
     if (!enhanceContent) {
       return res.status(500).json({ message: "AI returned no content" });
     }
 
     return res.status(200).json({ enhanceContent });
+
   } catch (error) {
     console.error("AI ERROR:", error);
     return res.status(500).json({ message: "AI failed", error: error.message });
   }
 };
 
-
 // controller for uploading the resume to the database
 //POST : /api/ai/upload-resume
-const uploadResume = async(req, res) => {
+const uploadResume = async (req, res) => {
   try {
-    const {resumeText, title} = req.body
+    const { resumeText, title } = req.body;
     const userId = req.userId;
 
-    if(!resumeText){
-      return res.status(400).json({message:"Missing required Fields"})
+    if (!resumeText) {
+      return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const systemPrompt = "You are an expert Ai Agent to extract data from resume."
+    const model = ai.getGenerativeModel({
+      model: process.env.OPENAI_MODEL || "gemini-2.0-flash",
+    });
 
-    const userPrompt = `extract data from this resume: ${resumeText} Provide data in the following JSON formate with no additional text before or after : 
-    {
-    professional_summary:{
-    type:String,
-    default:""
+    // --- SYSTEM + USER PROMPT MERGED FOR GEMINI ---
+    const prompt = `
+You are an expert AI agent for extracting structured data from resumes.
+
+Extract data ONLY in strict JSON format with NO extra text before or after.
+Do NOT include explanations.
+
+Here is the resume text:
+"${resumeText}"
+
+Return JSON in the following schema:
+
+{
+  "professional_summary": "",
+  "skills": [],
+  "personal_info": {
+    "image": "",
+    "full_name": "",
+    "profession": "",
+    "email": "",
+    "phone": "",
+    "location": "",
+    "linkedin": "",
+    "website": ""
   },
-    skills:[{
-    type:String
-  }],
-
-  personal_info:{
-    image:{
-      type:String,
-      default:''
-    },
-    full_name:{
-      type:String,
-      default:''
-    },
-    profession:{
-      type:String,
-      default:''
-    },
-    email:{
-      type:String,
-      default:''
-    },
-    phone:{
-      type:String,
-      default:''
-    },
-    location:{
-      type:String,
-      default:''
-    },
-    linkedin:{
-      type:String,
-      default:''
-    },
-    website:{
-      type:String,
-      default:''
-    },
-  },
-
-  experience:[
+  "experience": [
     {
-      company:{type : String  },
-      position:{type : String  },
-      start_date:{type : String  },
-      end_date:{type : String  },
-      description:{type : String  },
-      is_current:{type : String  },
+      "company": "",
+      "position": "",
+      "start_date": "",
+      "end_date": "",
+      "description": "",
+      "is_current": ""
     }
   ],
-
-    project:[
+  "project": [
     {
-      name:{type : String  },
-      type:{type : String  },
-      description:{type : String  }
+      "name": "",
+      "type": "",
+      "description": ""
     }
   ],
-
-  education:[
+  "education": [
     {
-      institution:{type : String  },
-      degree:{type : String  },
-      field:{type : String  },
-      graduation_date:{type : String  },
-      gpa:{type : String  }
+      "institution": "",
+      "degree": "",
+      "field": "",
+      "graduation_date": "",
+      "gpa": ""
     }
-  ],
+  ]
+}
 
-    }
+Return ONLY valid JSON.
     `;
 
-    const responses = await ai.chat.completions.create({
-    model: process.env.OPENAI_MODEL,
-    messages: [
-        { role: "system", content: systemPrompt },
-        {
-            role: "user",
-            content: userPrompt,
-        },
-    ],
-    response_format:  {type: 'json_object'}
-});
+    // --- GEMINI JSON MODE ---
+    const response = await model.generateContent({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        response_mime_type: "application/json"
+      }
+    });
 
+    const raw = response.response.text();
 
-  const extractedData = responses.choices[0].message.content;
-  const parsedData = JSON.parse(extractedData)
-  const newResume = await resumeModel.create({userId, title, ...parsedData})
-  res.json({resumeId : newResume._id})
+    // --- SAFELY PARSE JSON ---
+    let parsedData;
+    try {
+      parsedData = JSON.parse(raw);
+    } catch (err) {
+      console.error("Invalid JSON from AI:", raw);
+      return res.status(500).json({
+        message: "AI returned invalid JSON",
+        rawOutput: raw
+      });
+    }
+
+    // --- SAVE TO DATABASE ---
+    const newResume = await resumeModel.create({
+      userId,
+      title,
+      ...parsedData,
+    });
+
+    return res.json({ resumeId: newResume._id });
 
   } catch (error) {
-    return res.status(400).json({message: error.message})
+    console.error("AI ERROR uploadResume:", error);
+    return res.status(500).json({ message: error.message });
   }
-}
+};
 
 module.exports = {enhanceJobDescripion, enhaceProfessionalSummary, uploadResume}

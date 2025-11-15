@@ -1,8 +1,8 @@
-const OpenAI = require('openai')
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+require("dotenv").config();
 
-const ai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_BASE_URL
-});
+const key = (process.env.OPENAI_API_KEY || "").trim();
 
-module.exports = ai
+const ai = new GoogleGenerativeAI(key);
+
+module.exports = ai;

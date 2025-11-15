@@ -1,8 +1,8 @@
 const express = require("express");
 const {protect} = require("../middlewares/authMiddleware");
 const {
-  enhaceProfessionalSummary,
   enhanceJobDescripion,
+  enhaceProfessionalSummary,
   uploadResume,
 } = require("../controllers/aiController");
 
